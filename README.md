@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # HostelDesk 🏢
 
 > **Smart Hostel Complaint & Maintenance Management Platform**
@@ -129,3 +130,4 @@ The backend follows a Clean Architecture approach:
 
 ## 📄 License
 This project is proprietary and confidential. Unauthorized copying of this file, via any medium is strictly prohibited.
+=======
