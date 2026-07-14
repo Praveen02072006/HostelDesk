@@ -1,0 +1,32 @@
+import { Router } from 'express';
+import { authRouter } from './auth.routes';
+import { profileRouter } from './profile.routes';
+import { searchRouter } from './search.routes';
+import { complaintRouter } from './complaint.routes';
+import { userRouter } from './user.routes';
+import { workerRouter } from './worker.routes';
+import { hostelRouter } from './hostel.routes';
+import { categoryRouter } from './category.routes';
+import { analyticsRouter } from './analytics.routes';
+import { notificationRouter } from './notification.routes';
+import { uploadRouter } from './upload.routes';
+import { roomRouter } from './room.routes';
+import { inventoryRouter } from './inventory.routes';
+import { auditRouter } from './audit.routes';
+
+export const apiRouter = Router();
+
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/profile', profileRouter);
+apiRouter.use('/search', searchRouter);
+apiRouter.use('/complaints', complaintRouter);
+apiRouter.use('/users', userRouter);
+apiRouter.use('/workers', workerRouter);
+apiRouter.use('/hostels', hostelRouter);
+apiRouter.use('/rooms', roomRouter);
+apiRouter.use('/categories', categoryRouter);
+apiRouter.use('/analytics', analyticsRouter);
+apiRouter.use('/notifications', notificationRouter);
+apiRouter.use('/uploads', uploadRouter);
+apiRouter.use('/inventory', inventoryRouter);
+apiRouter.use('/audit', auditRouter);

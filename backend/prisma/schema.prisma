@@ -1,0 +1,552 @@
+// HostelDesk - Complete Prisma Schema
+// Production-ready normalized PostgreSQL database design
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  STUDENT
+  WORKER
+  ADMIN
+  SUPERVISOR
+  MANAGEMENT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ComplaintStatus {
+  RAISED
+  VERIFIED
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  ARCHIVED
+  CANCELLED
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum NotificationType {
+  COMPLAINT_SUBMITTED
+  COMPLAINT_VERIFIED
+  WORKER_ASSIGNED
+  COMPLAINT_ACCEPTED
+  COMPLAINT_UPDATED
+  COMPLAINT_COMPLETED
+  COMPLAINT_CLOSED
+  FEEDBACK_REMINDER
+  NEW_ASSIGNMENT
+  DEADLINE_REMINDER
+  HIGH_PRIORITY_ALERT
+  OVERDUE_ALERT
+  SLA_BREACH
+  SYSTEM
+}
+
+enum JobStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum InventoryCategory {
+  ELECTRICAL
+  PLUMBING
+  FURNITURE
+  CLEANING
+  TOOLS
+  PARTS
+  OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ASSIGN
+  ESCALATE
+  EXPORT
+  STATUS_CHANGE
+}
+
+// ============================================================
+// CORE USER MODELS
+// ============================================================
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password         String
+  role             Role
+  isActive         Boolean   @default(true)
+  isEmailVerified  Boolean   @default(false)
+  emailVerifyToken String?
+  resetToken       String?
+  resetTokenExpiry       DateTime?
+  lastLoginAt            DateTime?
+  lastPasswordChange     DateTime?
+  emailNotifications     Boolean   @default(true)
+  complaintNotifications Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // Relationships
+  student       Student?
+  worker        Worker?
+  supervisor    Supervisor?
+  management    Management?
+  admin         Admin?
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+  auditLogs     AuditLog[]     @relation("AuditUser")
+  targetLogs    AuditLog[]     @relation("AuditTarget")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  deviceInfo String?
+  ipAddress  String?
+  userAgent  String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Student {
+  id         String @id @default(uuid())
+  userId     String @unique
+  firstName  String
+  lastName   String
+  studentId  String @unique
+  phone            String?
+  avatar           String?
+  gender           Gender?
+  personalEmail    String?
+  guardianName     String?
+  guardianRelation String?
+  guardianPhone    String?
+  hostelId         String?
+  roomId           String?
+  year             Int?
+  department       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostel     Hostel?    @relation(fields: [hostelId], references: [id])
+  room       Room?      @relation(fields: [roomId], references: [id])
+  complaints Complaint[]
+  feedbacks  Feedback[]
+
+  @@map("students")
+}
+
+model Worker {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  firstName    String
+  lastName     String
+  employeeId   String  @unique
+  phone        String?
+  avatar       String?
+  specialization String[]
+  isAvailable  Boolean  @default(true)
+  hostelId     String?
+  rating       Float    @default(0)
+  totalJobs    Int      @default(0)
+  completedJobs Int     @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostel      Hostel?      @relation(fields: [hostelId], references: [id])
+  assignments Assignment[]
+  feedbacks   Feedback[]
+
+  @@map("workers")
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  hostelId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostel Hostel? @relation(fields: [hostelId], references: [id])
+
+  @@map("admins")
+}
+
+model Supervisor {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  hostelId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostel Hostel? @relation(fields: [hostelId], references: [id])
+
+  @@map("supervisors")
+}
+
+model Management {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("management")
+}
+
+// ============================================================
+// HOSTEL & ROOM MODELS
+// ============================================================
+
+model Hostel {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  address   String?
+  blocks    String[]
+  floors    Int      @default(5)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooms       Room[]
+  students    Student[]
+  workers     Worker[]
+  admins      Admin[]
+  supervisors Supervisor[]
+  complaints  Complaint[]
+
+  @@map("hostels")
+}
+
+model Room {
+  id         String   @id @default(uuid())
+  hostelId   String
+  roomNumber String
+  floor      Int
+  block      String
+  capacity   Int      @default(4)
+  qrCode     String?
+  qrCodeUrl  String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  hostel     Hostel     @relation(fields: [hostelId], references: [id])
+  students   Student[]
+  complaints Complaint[]
+
+  @@unique([hostelId, roomNumber, block])
+  @@map("rooms")
+}
+
+// ============================================================
+// COMPLAINT CATEGORY MODELS
+// ============================================================
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subcategories Subcategory[]
+  complaints    Complaint[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id          String   @id @default(uuid())
+  categoryId  String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   Category    @relation(fields: [categoryId], references: [id])
+  complaints Complaint[]
+
+  @@unique([categoryId, name])
+  @@map("subcategories")
+}
+
+// ============================================================
+// COMPLAINT MODEL (Core Entity)
+// ============================================================
+
+model Complaint {
+  id              String          @id @default(uuid())
+  ticketNumber    String          @unique
+  title           String
+  description     String
+  status          ComplaintStatus @default(RAISED)
+  priority        Priority        @default(MEDIUM)
+  categoryId      String
+  subcategoryId   String?
+  studentId       String
+  hostelId        String
+  roomId          String?
+  floor           Int?
+  block           String?
+  roomNumber      String?
+  isRecurring     Boolean         @default(false)
+  recurringCount  Int             @default(0)
+  slaDeadline     DateTime?
+  slaBreached     Boolean         @default(false)
+  estimatedCost   Float?
+  actualCost      Float?
+  notes           String?
+  adminNotes      String?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  verifiedAt      DateTime?
+  completedAt     DateTime?
+  closedAt        DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  category      Category          @relation(fields: [categoryId], references: [id])
+  subcategory   Subcategory?      @relation(fields: [subcategoryId], references: [id])
+  student       Student           @relation(fields: [studentId], references: [id])
+  hostel        Hostel            @relation(fields: [hostelId], references: [id])
+  room          Room?             @relation(fields: [roomId], references: [id])
+  images        ComplaintImage[]
+  assignments   Assignment[]
+  feedback      Feedback?
+  statusHistory StatusHistory[]
+  notifications Notification[]
+  inventoryUsage InventoryUsage[]
+
+  @@map("complaints")
+}
+
+model ComplaintImage {
+  id          String   @id @default(uuid())
+  complaintId String
+  url         String
+  publicId    String
+  type        String   // 'complaint', 'before_repair', 'after_repair'
+  caption     String?
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("complaint_images")
+}
+
+model StatusHistory {
+  id          String          @id @default(uuid())
+  complaintId String
+  fromStatus  ComplaintStatus?
+  toStatus    ComplaintStatus
+  changedBy   String
+  note        String?
+  createdAt   DateTime        @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("status_history")
+}
+
+// ============================================================
+// ASSIGNMENT MODEL
+// ============================================================
+
+model Assignment {
+  id          String    @id @default(uuid())
+  complaintId String
+  workerId    String
+  assignedBy  String
+  status      JobStatus @default(PENDING)
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  rejectReason String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  deadline    DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+  worker    Worker    @relation(fields: [workerId], references: [id])
+
+  @@map("assignments")
+}
+
+// ============================================================
+// FEEDBACK MODEL
+// ============================================================
+
+model Feedback {
+  id          String   @id @default(uuid())
+  complaintId String   @unique
+  studentId   String
+  workerId    String?
+  rating      Int      // 1-5
+  comment     String?
+  isAnonymous Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+  student   Student   @relation(fields: [studentId], references: [id])
+  worker    Worker?   @relation(fields: [workerId], references: [id])
+
+  @@map("feedbacks")
+}
+
+// ============================================================
+// NOTIFICATION MODEL
+// ============================================================
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  title       String
+  message     String
+  type        NotificationType
+  complaintId String?
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  complaint Complaint? @relation(fields: [complaintId], references: [id])
+
+  @@map("notifications")
+}
+
+// ============================================================
+// INVENTORY MODEL
+// ============================================================
+
+model InventoryItem {
+  id          String            @id @default(uuid())
+  name        String
+  category    InventoryCategory
+  description String?
+  unit        String
+  quantity    Int               @default(0)
+  minQuantity Int               @default(5)
+  unitCost    Float             @default(0)
+  hostelId    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  usages InventoryUsage[]
+
+  @@map("inventory_items")
+}
+
+model InventoryUsage {
+  id          String   @id @default(uuid())
+  itemId      String
+  complaintId String
+  quantity    Int
+  usedBy      String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  item      InventoryItem @relation(fields: [itemId], references: [id])
+  complaint Complaint     @relation(fields: [complaintId], references: [id])
+
+  @@map("inventory_usage")
+}
+
+// ============================================================
+// AUDIT LOG MODEL
+// ============================================================
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String
+  targetId   String?
+  targetType String?
+  action     AuditAction
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user   User  @relation("AuditUser", fields: [userId], references: [id])
+  target User? @relation("AuditTarget", fields: [targetId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ============================================================
+// SETTINGS MODEL
+// ============================================================
+
+model SystemSettings {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  value           Json
+  description     String?
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+
+  @@map("system_settings")
+}
