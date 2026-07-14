@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # HostelDesk 🏢
 
 > **Smart Hostel Complaint & Maintenance Management Platform**
