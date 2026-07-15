@@ -16,7 +16,7 @@ const complaintSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   categoryId: z.string({ required_error: 'Select a category' }).min(1, 'Select a category'),
-  roomNumber: z.string().min(1, 'Room number is required').regex(/^[a-zA-Z0-9\-\s]+$/, 'Invalid format (e.g., A-203)'),
+  roomNumber: z.string().optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']),
 });
 
@@ -55,6 +55,7 @@ export default function NewComplaint() {
     },
     onSuccess: () => {
       toast.success('Complaint submitted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['studentComplaints'] });
       queryClient.invalidateQueries({ queryKey: ['studentComplaintsFull'] });
       navigate('/student/dashboard');
     },
@@ -145,11 +146,10 @@ export default function NewComplaint() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Input
-                  label="Room Number"
-                  placeholder="Enter Room Number (e.g., A-203)"
+                  label="Room Number (Optional)"
+                  placeholder="Leave blank to use your assigned room"
                   {...register('roomNumber')}
                   error={errors.roomNumber?.message}
-                  required
                   onChange={(e) => {
                     e.target.value = e.target.value.toUpperCase();
                   }}

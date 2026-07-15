@@ -235,15 +235,15 @@ export const markCompleted = async (req: Request, res: Response) => {
   await prisma.notification.create({
     data: {
       userId: student.userId,
-      title: 'Repair Completed!',
-      message: `Your complaint #${assignment.complaint.ticketNumber} has been resolved. Please verify and rate the work.`,
+      title: '🔧 Work Completed - Verification Needed',
+      message: `The worker has completed your complaint #${assignment.complaint.ticketNumber}. Please verify the work.`,
       type: 'COMPLAINT_COMPLETED',
       complaintId: assignment.complaintId,
     },
   });
   emitNotification(student.userId, {
-    title: 'Repair Completed!',
-    message: `Complaint #${assignment.complaint.ticketNumber} resolved. Please rate the work.`,
+    title: '🔧 Work Completed - Verification Needed',
+    message: `Complaint #${assignment.complaint.ticketNumber} work done. Please verify.`,
     type: 'COMPLAINT_COMPLETED',
     complaintId: assignment.complaintId,
   });

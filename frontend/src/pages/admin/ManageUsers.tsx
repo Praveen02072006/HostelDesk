@@ -24,7 +24,7 @@ export default function ManageUsers() {
     queryKey: ['adminUsers'],
     queryFn: async () => {
       const res = await api.get('/users?limit=100');
-      return res.data.data;
+      return res.data;
     },
   });
 

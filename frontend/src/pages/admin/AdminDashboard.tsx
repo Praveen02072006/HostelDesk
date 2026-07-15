@@ -1,5 +1,5 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/axios';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -7,11 +7,26 @@ import { Users, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { DashboardStats } from '../../types';
 
 export default function AdminDashboard() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handleNotification = () => {
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['adminCategoryStats'] });
+      queryClient.invalidateQueries({ queryKey: ['adminTrendsStats'] });
+    };
+    
+    window.addEventListener('new_notification', handleNotification);
+    return () => {
+      window.removeEventListener('new_notification', handleNotification);
+    };
+  }, [queryClient]);
+
   const { data: statsData, isLoading } = useQuery({
     queryKey: ['adminDashboardStats'],
     queryFn: async () => {
       const res = await api.get('/analytics/dashboard');
-      return res.data.data as DashboardStats;
+      return res.data as DashboardStats;
     },
   });
 
@@ -19,7 +34,7 @@ export default function AdminDashboard() {
     queryKey: ['adminCategoryStats'],
     queryFn: async () => {
       const res = await api.get('/analytics/categories');
-      return res.data.data;
+      return res.data;
     },
   });
 
@@ -27,7 +42,7 @@ export default function AdminDashboard() {
     queryKey: ['adminTrendsStats'],
     queryFn: async () => {
       const res = await api.get('/analytics/trends?months=6');
-      return res.data.data;
+      return res.data;
     },
   });
 

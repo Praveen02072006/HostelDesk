@@ -13,11 +13,11 @@ export default function ManageCategories() {
     queryKey: ['adminCategories'],
     queryFn: async () => {
       const res = await api.get('/categories?includeSub=true');
-      return res.data.data;
+      return res.data;
     },
   });
 
-  const categories = data?.categories || [];
+  const categories = data || [];
 
   const columns: Column<Category>[] = [
     {

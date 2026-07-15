@@ -12,7 +12,7 @@ export default function WorkerAnalytics() {
     queryKey: ['supervisorWorkers'],
     queryFn: async () => {
       const res = await api.get('/users/workers');
-      return res.data.data;
+      return res.data;
     },
   });
 

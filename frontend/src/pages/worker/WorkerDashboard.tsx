@@ -11,7 +11,7 @@ export default function WorkerDashboard() {
     queryKey: ['workerStats'],
     queryFn: async () => {
       const res = await api.get('/workers/stats');
-      return res.data.data;
+      return res.data;
     },
   });
 

@@ -13,6 +13,8 @@ import {
   updateComplaintPriority,
   getComplaintStats,
   bulkAssign,
+  createComplaintFeedback,
+  verifyCompletion,
 } from '../controllers/complaint.controller';
 import { authenticate, authorize } from '../middlewares/auth';
 import { Role } from '@prisma/client';
@@ -26,6 +28,8 @@ complaintRouter.use(authenticate);
 complaintRouter.post('/', authorize(Role.STUDENT), createComplaint);
 complaintRouter.get('/my', authorize(Role.STUDENT), getMyComplaints);
 complaintRouter.patch('/:id/cancel', authorize(Role.STUDENT), cancelComplaint);
+complaintRouter.post('/:id/feedback', authorize(Role.STUDENT), createComplaintFeedback);
+complaintRouter.post('/:id/verify', authorize(Role.STUDENT), verifyCompletion);
 
 // Admin/Supervisor routes
 complaintRouter.get(

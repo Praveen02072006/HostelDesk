@@ -34,7 +34,7 @@ export const Sidebar = () => {
           { name: 'Dashboard', to: '/admin/dashboard', icon: LayoutDashboard },
           { name: 'Complaints', to: '/admin/complaints', icon: FileText },
           { name: 'Users', to: '/admin/users', icon: Users },
-          { name: 'Rooms & QR', to: '/admin/rooms', icon: Building2 },
+          { name: 'Rooms', to: '/admin/rooms', icon: Building2 },
           { name: 'Categories', to: '/admin/categories', icon: Settings },
         ];
       case 'SUPERVISOR':

@@ -76,7 +76,7 @@ All student accounts use the following credentials during development.
 
 | Student ID | Guardian Name | Relationship | Guardian Phone |
 |------------|---------------|--------------|----------------|
-| SEC24CS006 | Gnanasekar M | Father  | 9865196238 |
+| SEC24CS006 | Madhanmohan  | Father  | 6383619821 |
 
 ------------------------------------------------------------------------
 

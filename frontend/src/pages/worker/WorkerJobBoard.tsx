@@ -1,24 +1,63 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/axios';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { DataTable, Column } from '../../components/ui/DataTable';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { formatRelativeTime } from '../../lib/utils';
-import { Clock, Eye, CheckCircle2 } from 'lucide-react';
-import { Complaint } from '../../types'; // Assuming types exist or using any for now
+import { Clock, Eye, CheckCircle2, PlayCircle, ThumbsUp, XCircle } from 'lucide-react';
+import { Complaint } from '../../types';
+import toast from 'react-hot-toast';
 
 export default function WorkerJobBoard() {
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ['workerJobs'],
     queryFn: async () => {
-      const res = await api.get('/workers/jobs?limit=100'); // Endpoint matches worker.routes.ts
-      return res.data.data;
+      const res = await api.get('/workers/jobs?limit=100');
+      return res.data;
     },
   });
 
-  const jobs = data || []; // The backend usually returns array directly or inside a wrapper. Let's assume it returns jobs array.
+  const acceptMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      await api.patch(`/workers/jobs/${assignmentId}/accept`);
+    },
+    onSuccess: () => {
+      toast.success('Job accepted');
+      queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['workerStats'] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to accept job'),
+  });
+
+  const startMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      await api.patch(`/workers/jobs/${assignmentId}/in-progress`, { images: [] });
+    },
+    onSuccess: () => {
+      toast.success('Job started');
+      queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['workerStats'] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to start job'),
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      await api.patch(`/workers/jobs/${assignmentId}/complete`, { images: [], notes: 'Completed' });
+    },
+    onSuccess: () => {
+      toast.success('Job marked as completed');
+      queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['workerStats'] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to complete job'),
+  });
+
+  const jobs = data?.assignments || [];
 
   const columns: Column<any>[] = [
     {
@@ -59,11 +98,36 @@ export default function WorkerJobBoard() {
       header: 'Actions',
       cell: (item: any) => (
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="p-2 h-8 w-8 text-slate-400 hover:text-indigo-600" title="View Details">
-            <Eye size={16} />
-          </Button>
-          {item.status !== 'COMPLETED' && (
-            <Button variant="success" size="sm" className="hidden lg:flex" leftIcon={<CheckCircle2 size={14} />}>
+          {item.status === 'PENDING' && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              leftIcon={<ThumbsUp size={14} />}
+              onClick={() => acceptMutation.mutate(item.id)}
+              isLoading={acceptMutation.isPending}
+            >
+              Accept
+            </Button>
+          )}
+          {item.status === 'ACCEPTED' && (
+            <Button 
+              variant="primary" 
+              size="sm" 
+              leftIcon={<PlayCircle size={14} />}
+              onClick={() => startMutation.mutate(item.id)}
+              isLoading={startMutation.isPending}
+            >
+              Start Work
+            </Button>
+          )}
+          {item.status === 'IN_PROGRESS' && (
+            <Button 
+              variant="success" 
+              size="sm" 
+              leftIcon={<CheckCircle2 size={14} />}
+              onClick={() => completeMutation.mutate(item.id)}
+              isLoading={completeMutation.isPending}
+            >
               Mark Done
             </Button>
           )}

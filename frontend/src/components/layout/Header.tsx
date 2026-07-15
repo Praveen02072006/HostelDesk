@@ -40,8 +40,8 @@ export const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
   const fetchNotifications = async () => {
     try {
       const res = await api.get('/notifications?limit=5');
-      setNotifications(res.data.data.notifications);
-      setUnreadCount(res.data.data.unreadCount);
+      setNotifications(res.data?.notifications || []);
+      setUnreadCount(res.data?.unreadCount || 0);
     } catch (error) {
       console.error('Failed to fetch notifications', error);
     }

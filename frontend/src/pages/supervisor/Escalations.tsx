@@ -14,7 +14,7 @@ export default function Escalations() {
     queryKey: ['supervisorEscalations'],
     queryFn: async () => {
       const res = await api.get('/complaints?slaBreached=true&limit=100');
-      return res.data.data;
+      return res.data;
     },
   });
 

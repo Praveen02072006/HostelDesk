@@ -31,13 +31,14 @@ export const PRIORITY_COLORS = {
   LOW: 'priority-low',
 };
 
-export const STATUS_COLORS = {
+export const STATUS_COLORS: Record<string, string> = {
   RAISED: 'badge-raised',
   VERIFIED: 'badge-verified',
   ASSIGNED: 'badge-assigned',
   ACCEPTED: 'badge-accepted',
   IN_PROGRESS: 'badge-in-progress',
   COMPLETED: 'badge-completed',
+  PENDING_VERIFICATION: 'badge-completed',
   CLOSED: 'badge-closed',
   ARCHIVED: 'badge-archived',
   CANCELLED: 'badge-cancelled',

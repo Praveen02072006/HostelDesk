@@ -9,7 +9,7 @@ export default function Analytics() {
     queryKey: ['managementResolutionTime'],
     queryFn: async () => {
       const res = await api.get('/analytics/resolution-time');
-      return res.data.data;
+      return res.data;
     },
   });
 
@@ -17,7 +17,7 @@ export default function Analytics() {
     queryKey: ['managementSla'],
     queryFn: async () => {
       const res = await api.get('/analytics/sla');
-      return res.data.data;
+      return res.data;
     },
   });
 

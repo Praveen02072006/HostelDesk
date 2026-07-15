@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { NotFoundError, ForbiddenError, AppError } from '../middlewares/errorHandler';
-import { ComplaintStatus, Priority, Role } from '@prisma/client';
+import { ComplaintStatus, Priority, Role, JobStatus } from '@prisma/client';
 import { emitNotification } from '../socket';
 import { sendEmail, emailTemplates } from '../config/email';
 import { v4 as uuidv4 } from 'uuid';
@@ -37,6 +37,7 @@ export const createComplaint = async (req: Request, res: Response) => {
 
   const student = await prisma.student.findUnique({
     where: { userId: req.user!.userId },
+    include: { room: true },
   });
   if (!student) throw new NotFoundError('Student profile');
   if (!student.hostelId) {
@@ -74,10 +75,10 @@ export const createComplaint = async (req: Request, res: Response) => {
       categoryId: body.categoryId,
       studentId: student.id,
       hostelId: student.hostelId!, // Always use the student's own hostelId (server-side)
-      roomId: body.roomId,
-      floor: body.floor,
-      block: body.block,
-      roomNumber: body.roomNumber,
+      roomId: student.roomId || body.roomId,
+      floor: student.room?.floor ?? body.floor,
+      block: student.room?.block || body.block,
+      roomNumber: student.room?.roomNumber || body.roomNumber,
       priority: body.priority,
       isRecurring,
       slaDeadline,
@@ -118,27 +119,32 @@ export const createComplaint = async (req: Request, res: Response) => {
     },
   });
 
-  // Notify admins about critical complaints
-  if (body.priority === Priority.CRITICAL && student.hostelId) {
+  // Notify all admins in the student's hostel about every new complaint
+  if (student.hostelId) {
     const admins = await prisma.admin.findMany({
       where: { hostelId: student.hostelId },
       include: { user: true },
     });
 
+    const isCritical = body.priority === Priority.CRITICAL;
     for (const admin of admins) {
       await prisma.notification.create({
         data: {
           userId: admin.userId,
-          title: '🚨 Critical Complaint Raised',
-          message: `Critical complaint #${ticketNumber} raised: ${body.title}`,
-          type: 'HIGH_PRIORITY_ALERT',
+          title: isCritical ? '🚨 Critical Complaint Raised' : '📋 New Complaint Raised',
+          message: isCritical
+            ? `Critical complaint #${ticketNumber} raised: ${body.title}`
+            : `New complaint #${ticketNumber}: ${body.title}`,
+          type: isCritical ? 'HIGH_PRIORITY_ALERT' : 'COMPLAINT_SUBMITTED',
           complaintId: complaint.id,
         },
       });
       emitNotification(admin.userId, {
-        title: '🚨 Critical Complaint',
-        message: `Critical complaint #${ticketNumber} requires immediate attention`,
-        type: 'HIGH_PRIORITY_ALERT',
+        title: isCritical ? '🚨 Critical Complaint' : '📋 New Complaint',
+        message: isCritical
+          ? `Critical complaint #${ticketNumber} requires immediate attention`
+          : `New complaint #${ticketNumber}: ${body.title}`,
+        type: isCritical ? 'HIGH_PRIORITY_ALERT' : 'COMPLAINT_SUBMITTED',
         complaintId: complaint.id,
       });
     }
@@ -669,3 +675,207 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
   res.status(201).json({ success: true, data: assignments });
 };
+
+export const createComplaintFeedback = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const schema = z.object({
+    rating: z.number().min(1).max(5),
+    comment: z.string().optional(),
+    isAnonymous: z.boolean().optional().default(false),
+  });
+  const body = schema.parse(req.body);
+
+  const student = await prisma.student.findUnique({ where: { userId: req.user!.userId } });
+  if (!student) throw new NotFoundError('Student profile');
+
+  const complaint = await prisma.complaint.findUnique({
+    where: { id },
+    include: { assignments: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  });
+  if (!complaint) throw new NotFoundError('Complaint');
+  if (complaint.studentId !== student.id) throw new ForbiddenError('You can only provide feedback on your own complaints');
+  if (complaint.status !== ComplaintStatus.COMPLETED && complaint.status !== ComplaintStatus.CLOSED) {
+    throw new AppError('Feedback can only be submitted for completed or closed complaints', 400);
+  }
+
+  // Check for existing feedback
+  const existingFeedback = await prisma.feedback.findUnique({ where: { complaintId: id } });
+  if (existingFeedback) throw new AppError('Feedback already submitted for this complaint', 400);
+
+  const workerId = complaint.assignments[0]?.workerId || null;
+
+  const feedback = await prisma.feedback.create({
+    data: {
+      complaintId: id,
+      studentId: student.id,
+      workerId,
+      rating: body.rating,
+      comment: body.comment,
+      isAnonymous: body.isAnonymous,
+    },
+  });
+
+  // Update worker's average rating if a worker was assigned
+  if (workerId) {
+    const avgRating = await prisma.feedback.aggregate({
+      where: { workerId },
+      _avg: { rating: true },
+    });
+    await prisma.worker.update({
+      where: { id: workerId },
+      data: { rating: avgRating._avg.rating || 0 },
+    });
+  }
+
+  res.status(201).json({ success: true, message: 'Feedback submitted successfully', data: feedback });
+};
+
+export const verifyCompletion = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const schema = z.object({
+    verified: z.boolean(),
+    rating: z.number().min(1).max(5).optional(),
+    comment: z.string().optional(),
+    isAnonymous: z.boolean().optional().default(false),
+    rejectionReason: z.string().optional(),
+  });
+  const body = schema.parse(req.body);
+
+  const student = await prisma.student.findUnique({ where: { userId: req.user!.userId } });
+  if (!student) throw new NotFoundError('Student profile');
+
+  const complaint = await prisma.complaint.findUnique({
+    where: { id },
+    include: { assignments: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  });
+  if (!complaint) throw new NotFoundError('Complaint');
+  if (complaint.studentId !== student.id) throw new ForbiddenError('You can only verify your own complaints');
+  if (complaint.status !== ComplaintStatus.COMPLETED) {
+    throw new AppError('Only complaints with completed work can be verified', 400);
+  }
+
+  if (body.verified) {
+    // Student confirms work is done → close the complaint
+    await prisma.complaint.update({
+      where: { id },
+      data: {
+        status: ComplaintStatus.CLOSED,
+        closedAt: new Date(),
+        statusHistory: {
+          create: {
+            fromStatus: ComplaintStatus.COMPLETED,
+            toStatus: ComplaintStatus.CLOSED,
+            changedBy: req.user!.userId,
+            note: 'Student verified work completion',
+          },
+        },
+      },
+    });
+
+    // Save feedback if rating was provided
+    const workerId = complaint.assignments[0]?.workerId || null;
+    if (body.rating) {
+      const existingFeedback = await prisma.feedback.findUnique({ where: { complaintId: id } });
+      if (!existingFeedback) {
+        await prisma.feedback.create({
+          data: {
+            complaintId: id,
+            studentId: student.id,
+            workerId,
+            rating: body.rating,
+            comment: body.comment,
+            isAnonymous: body.isAnonymous,
+          },
+        });
+
+        // Update worker's average rating
+        if (workerId) {
+          const avgRating = await prisma.feedback.aggregate({
+            where: { workerId },
+            _avg: { rating: true },
+          });
+          await prisma.worker.update({
+            where: { id: workerId },
+            data: { rating: avgRating._avg.rating || 0 },
+          });
+        }
+      }
+    }
+
+    // Notify admins
+    if (complaint.hostelId) {
+      const admins = await prisma.admin.findMany({
+        where: { hostelId: complaint.hostelId },
+      });
+      for (const admin of admins) {
+        await prisma.notification.create({
+          data: {
+            userId: admin.userId,
+            title: '✅ Work Verified',
+            message: `Student verified completion of complaint #${complaint.ticketNumber}`,
+            type: 'COMPLAINT_UPDATED',
+            complaintId: id,
+          },
+        });
+        emitNotification(admin.userId, {
+          title: '✅ Work Verified',
+          message: `Complaint #${complaint.ticketNumber} verified and closed`,
+          type: 'COMPLAINT_UPDATED',
+          complaintId: id,
+        });
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Work verified and complaint closed' });
+  } else {
+    // Student rejects → reopen to IN_PROGRESS
+    await prisma.complaint.update({
+      where: { id },
+      data: {
+        status: ComplaintStatus.IN_PROGRESS,
+        completedAt: null,
+        statusHistory: {
+          create: {
+            fromStatus: ComplaintStatus.COMPLETED,
+            toStatus: ComplaintStatus.IN_PROGRESS,
+            changedBy: req.user!.userId,
+            note: body.rejectionReason || 'Student rejected: work not satisfactory',
+          },
+        },
+      },
+    });
+
+    // Reset the latest assignment back to IN_PROGRESS
+    if (complaint.assignments[0]) {
+      await prisma.assignment.update({
+        where: { id: complaint.assignments[0].id },
+        data: { status: JobStatus.IN_PROGRESS, completedAt: null },
+      });
+    }
+
+    // Notify worker
+    if (complaint.assignments[0]?.workerId) {
+      const worker = await prisma.worker.findUnique({ where: { id: complaint.assignments[0].workerId } });
+      if (worker) {
+        await prisma.notification.create({
+          data: {
+            userId: worker.userId,
+            title: '⚠️ Work Rejected',
+            message: `Student rejected work on complaint #${complaint.ticketNumber}. Reason: ${body.rejectionReason || 'Not satisfactory'}`,
+            type: 'COMPLAINT_UPDATED',
+            complaintId: id,
+          },
+        });
+        emitNotification(worker.userId, {
+          title: '⚠️ Work Rejected',
+          message: `Complaint #${complaint.ticketNumber} needs more work`,
+          type: 'COMPLAINT_UPDATED',
+          complaintId: id,
+        });
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Work rejected, complaint reopened' });
+  }
+};
+

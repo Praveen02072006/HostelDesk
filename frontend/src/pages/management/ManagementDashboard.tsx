@@ -10,7 +10,7 @@ export default function ManagementDashboard() {
     queryKey: ['managementStats'],
     queryFn: async () => {
       const res = await api.get('/analytics/dashboard');
-      return res.data.data as DashboardStats;
+      return res.data as DashboardStats;
     },
   });
 

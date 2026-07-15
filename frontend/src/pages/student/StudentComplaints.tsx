@@ -1,5 +1,5 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/axios';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -10,11 +10,22 @@ import { formatRelativeTime } from '../../lib/utils';
 import { Complaint } from '../../types';
 
 export default function StudentComplaints() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handleNewNotification = () => {
+      queryClient.invalidateQueries({ queryKey: ['studentComplaintsFull'] });
+    };
+
+    window.addEventListener('new_notification', handleNewNotification);
+    return () => window.removeEventListener('new_notification', handleNewNotification);
+  }, [queryClient]);
+
   const { data, isLoading } = useQuery({
     queryKey: ['studentComplaintsFull'],
     queryFn: async () => {
-      const res = await api.get('/complaints/my?limit=100');
-      return res.data.data;
+      const res = await api.get('/complaints/my?limit=100') as any;
+      return res.data;
     },
   });
 

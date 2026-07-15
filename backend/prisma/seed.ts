@@ -216,11 +216,22 @@ async function main() {
     ['Cleaning', 'Others'],
   ];
   const workerIds: string[] = [];
-
+  const generatedEmails = new Set<string>();
+  
   for (let i = 0; i < 20; i++) {
     const firstName = getRandomElement(firstNames);
     const lastName = getRandomElement(lastNames);
-    const email = `worker${i + 1}@hosteldesk.com`;
+    
+    // Create name-based email and handle collisions
+    let emailBase = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
+    let email = `${emailBase}@hosteldesk.com`;
+    let attempt = 1;
+    while (generatedEmails.has(email)) {
+      email = `${emailBase}${attempt}@hosteldesk.com`;
+      attempt++;
+    }
+    generatedEmails.add(email);
+    
     const hostel = hostels[i % hostels.length];
 
     const user = await prisma.user.upsert({

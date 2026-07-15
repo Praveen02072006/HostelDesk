@@ -13,8 +13,8 @@ export default function StudentDashboard() {
   const { data: myComplaints, isLoading } = useQuery({
     queryKey: ['studentComplaints'],
     queryFn: async () => {
-      const res = await api.get('/complaints/my?limit=5');
-      return res.data.data;
+      const res = await api.get('/complaints/my?limit=5') as any;
+      return res.data;
     },
   });
 

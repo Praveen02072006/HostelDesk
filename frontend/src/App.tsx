@@ -22,7 +22,7 @@ const WorkerJobBoard = React.lazy(() => import('./pages/worker/WorkerJobBoard'))
 const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminComplaints = React.lazy(() => import('./pages/admin/AdminComplaints'));
 const ManageUsers = React.lazy(() => import('./pages/admin/ManageUsers'));
-const RoomsAndQR = React.lazy(() => import('./pages/admin/RoomsAndQR'));
+const Rooms = React.lazy(() => import('./pages/admin/Rooms'));
 const ManageCategories = React.lazy(() => import('./pages/admin/ManageCategories'));
 
 // Supervisor Pages
@@ -109,7 +109,7 @@ export default function App() {
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/complaints" element={<AdminComplaints />} />
             <Route path="/admin/users" element={<ManageUsers />} />
-            <Route path="/admin/rooms" element={<RoomsAndQR />} />
+            <Route path="/admin/rooms" element={<Rooms />} />
             <Route path="/admin/categories" element={<ManageCategories />} />
           </Route>
 
