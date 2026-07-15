@@ -45,8 +45,15 @@ app.use(cors({
 // ============================================================
 app.use(compression());
 app.use(cookieParser(env.COOKIE_SECRET));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Vercel serverless environment already parses the body
+app.use((req, res, next) => {
+  if (req.body && Object.keys(req.body).length > 0) return next();
+  express.json({ limit: '10mb' })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.body && Object.keys(req.body).length > 0) return next();
+  express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+});
 
 if (env.NODE_ENV !== 'test') {
   app.use(morgan('combined', {
