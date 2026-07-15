@@ -10,7 +10,12 @@ const onlineUsers = new Map<string, string>(); // userId -> socketId
 export const initializeSocket = (server: HTTPServer): Server => {
   io = new Server(server, {
     cors: {
-      origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'],
+      origin: [
+        process.env.FRONTEND_URL || 'http://localhost:5173',
+        'http://localhost:3000',
+        'https://hostel-desk-red.vercel.app',
+        'https://hostel-desk-red.vercel.app/'
+      ],
       methods: ['GET', 'POST'],
       credentials: true,
     },
