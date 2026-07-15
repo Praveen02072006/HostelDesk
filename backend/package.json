@@ -38,7 +38,7 @@
     "socket.io": "^4.6.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
-    "uuid": "^9.0.1",
+    "uuid": "^11.1.1",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
@@ -71,7 +71,7 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
