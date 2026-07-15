@@ -14,8 +14,8 @@ export const rateLimiter = rateLimit({
 });
 
 export const strictRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 10,
+  windowMs: 60 * 1000, // 15 min
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -25,8 +25,8 @@ export const strictRateLimiter = rateLimit({
 });
 
 export const authRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,
+  windowMs: 60 * 1000, // 1 hour
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
