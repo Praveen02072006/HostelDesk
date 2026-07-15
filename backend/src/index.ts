@@ -94,11 +94,13 @@ const start = async () => {
   await connectDatabase();
   startCronJobs();
 
-  server.listen(env.PORT, () => {
-    logger.info(`🚀 HostelDesk API running on port ${env.PORT}`);
-    logger.info(`📚 Swagger docs: http://localhost:${env.PORT}/api-docs`);
-    logger.info(`🌍 Environment: ${env.NODE_ENV}`);
-  });
+  if (process.env.VERCEL !== '1') {
+    server.listen(env.PORT, () => {
+      logger.info(`🚀 HostelDesk API running on port ${env.PORT}`);
+      logger.info(`📚 Swagger docs: http://localhost:${env.PORT}/api-docs`);
+      logger.info(`🌍 Environment: ${env.NODE_ENV}`);
+    });
+  }
 };
 
 start().catch((err) => {
@@ -106,4 +108,5 @@ start().catch((err) => {
   process.exit(1);
 });
 
+export default app;
 export { app, server };
