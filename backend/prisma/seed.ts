@@ -1,7 +1,13 @@
 import { PrismaClient, ComplaintStatus, Priority, Role, JobStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 
 const SALT_ROUNDS = 12;
 const DEFAULT_PASSWORD = 'Password123';
@@ -19,7 +25,7 @@ const lastNames = ['Kumar', 'Sharma', 'Patel', 'Singh', 'Reddy', 'Naidu', 'Rao',
 
 const departments = ['Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Chemical', 'Biotechnology', 'Mathematics', 'Physics'];
 
-const complaintTitles = {
+const complaintTitles: Record<string, string[]> = {
   Electrical: ['Lights not working in room', 'Power outlet not functioning', 'Fan making noise', 'AC not cooling', 'Short circuit issue', 'Tube light flickering'],
   Plumbing: ['Water leakage from pipe', 'Tap not working', 'Blocked drain', 'Toilet flush broken', 'Water supply interrupted', 'Hot water not available'],
   Furniture: ['Chair leg broken', 'Table damaged', 'Bed frame loose', 'Cupboard door won\'t close', 'Drawer broken', 'Study table wobbly'],
@@ -33,8 +39,49 @@ const getRandomElement = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.
 const getRandomInt = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1)) + min;
 const getRandomDate = (daysBack: number): Date => new Date(Date.now() - Math.random() * daysBack * 24 * 60 * 60 * 1000);
 
+// Keep connection alive by pinging periodically
+let keepAliveInterval: ReturnType<typeof setInterval>;
+function startKeepAlive() {
+  keepAliveInterval = setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (_) {
+      // Ignore keepalive failures
+    }
+  }, 5000);
+}
+function stopKeepAlive() {
+  if (keepAliveInterval) clearInterval(keepAliveInterval);
+}
+
 async function main() {
   console.log('🌱 Starting HostelDesk seed...');
+  startKeepAlive();
+
+  // ============================================================
+  // CLEANUP - Delete all existing data in correct order
+  // ============================================================
+  console.log('🧹 Cleaning existing data...');
+  await prisma.inventoryUsage.deleteMany();
+  await prisma.inventoryItem.deleteMany();
+  await prisma.auditLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.feedback.deleteMany();
+  await prisma.assignment.deleteMany();
+  await prisma.statusHistory.deleteMany();
+  await prisma.complaint.deleteMany();
+  await prisma.student.deleteMany();
+  await prisma.worker.deleteMany();
+  await prisma.admin.deleteMany();
+  await prisma.supervisor.deleteMany();
+  await prisma.management.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.room.deleteMany();
+  await prisma.subcategory.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.hostel.deleteMany();
+  console.log('✅ Cleaned existing data');
 
   const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
 
@@ -58,7 +105,7 @@ async function main() {
   console.log(`✅ Created ${hostels.length} hostels`);
 
   // ============================================================
-  // ROOMS (50+ rooms per hostel)
+  // ROOMS
   // ============================================================
   console.log('Creating rooms...');
   const rooms: { id: string; hostelId: string; block: string; floor: number; roomNumber: string }[] = [];
@@ -68,12 +115,23 @@ async function main() {
       for (let floor = 1; floor <= hostel.floors; floor++) {
         for (let roomNum = 1; roomNum <= 8; roomNum++) {
           const roomNumber = `${block}${floor}0${roomNum}`;
-          const qrCode = `${hostel.code}-${block}-${floor}-${roomNumber}`.toLowerCase();
 
           const room = await prisma.room.upsert({
-            where: { hostelId_roomNumber_block: { hostelId: hostel.id, roomNumber, block } },
+            where: {
+              hostelId_roomNumber_block: {
+                hostelId: hostel.id,
+                roomNumber,
+                block,
+              },
+            },
+            create: {
+              hostelId: hostel.id,
+              roomNumber,
+              floor,
+              block,
+              capacity: 4,
+            },
             update: {},
-            create: { hostelId: hostel.id, roomNumber, floor, block, capacity: 4, qrCode },
           });
           rooms.push({ id: room.id, hostelId: hostel.id, block, floor, roomNumber });
         }
@@ -128,7 +186,7 @@ async function main() {
   ];
 
   for (const m of managementData) {
-    const user = await prisma.user.upsert({
+    await prisma.user.upsert({
       where: { email: m.email },
       update: {},
       create: {
@@ -216,22 +274,11 @@ async function main() {
     ['Cleaning', 'Others'],
   ];
   const workerIds: string[] = [];
-  const generatedEmails = new Set<string>();
-  
+
   for (let i = 0; i < 20; i++) {
     const firstName = getRandomElement(firstNames);
     const lastName = getRandomElement(lastNames);
-    
-    // Create name-based email and handle collisions
-    let emailBase = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
-    let email = `${emailBase}@hosteldesk.com`;
-    let attempt = 1;
-    while (generatedEmails.has(email)) {
-      email = `${emailBase}${attempt}@hosteldesk.com`;
-      attempt++;
-    }
-    generatedEmails.add(email);
-    
+    const email = `worker${i + 1}@hosteldesk.com`;
     const hostel = hostels[i % hostels.length];
 
     const user = await prisma.user.upsert({
@@ -273,7 +320,8 @@ async function main() {
     const lastName = getRandomElement(lastNames);
     const email = `student${i + 1}@hosteldesk.com`;
     const hostel = hostels[i % hostels.length];
-    const room = rooms.filter(r => r.hostelId === hostel.id)[i % rooms.filter(r => r.hostelId === hostel.id).length];
+    const hostelRooms = rooms.filter(r => r.hostelId === hostel.id);
+    const room = hostelRooms[i % hostelRooms.length];
 
     const user = await prisma.user.upsert({
       where: { email },
@@ -304,9 +352,9 @@ async function main() {
   console.log(`✅ Created 100 students`);
 
   // ============================================================
-  // COMPLAINTS (500)
+  // COMPLAINTS (50 - smaller batch to avoid Neon connection drops)
   // ============================================================
-  console.log('Creating 500 complaints...');
+  console.log('Creating complaints...');
   const statuses = [
     ComplaintStatus.RAISED,
     ComplaintStatus.VERIFIED,
@@ -318,7 +366,7 @@ async function main() {
     ComplaintStatus.CANCELLED,
   ];
   const priorities = [Priority.CRITICAL, Priority.HIGH, Priority.MEDIUM, Priority.LOW];
-  const priorityWeights = [0.05, 0.2, 0.5, 0.25]; // probability weights
+  const priorityWeights = [0.05, 0.2, 0.5, 0.25];
 
   const getWeightedPriority = (): Priority => {
     const rand = Math.random();
@@ -331,7 +379,9 @@ async function main() {
   };
 
   let complaintCount = 0;
-  for (let i = 0; i < 500; i++) {
+  const COMPLAINT_COUNT = 50;
+
+  for (let i = 0; i < COMPLAINT_COUNT; i++) {
     const student = await prisma.student.findFirst({
       where: { id: studentIds[i % studentIds.length] },
       include: { hostel: true, room: true },
@@ -343,13 +393,13 @@ async function main() {
     const subcategory = getRandomElement(categorySubcategories);
     const priority = getWeightedPriority();
     const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const createdAt = getRandomDate(180); // last 6 months
+    const createdAt = getRandomDate(180);
 
-    const slaHours = { CRITICAL: 4, HIGH: 24, MEDIUM: 72, LOW: 168 };
+    const slaHours: Record<string, number> = { CRITICAL: 4, HIGH: 24, MEDIUM: 72, LOW: 168 };
     const slaDeadline = new Date(createdAt.getTime() + slaHours[priority] * 60 * 60 * 1000);
     const slaBreached = status !== ComplaintStatus.COMPLETED && status !== ComplaintStatus.CLOSED && slaDeadline < new Date();
 
-    const titleList = complaintTitles[category.name as keyof typeof complaintTitles] || ['General issue'];
+    const titleList = complaintTitles[category.name] || ['General issue'];
     const title = getRandomElement(titleList);
 
     const complaint = await prisma.complaint.create({
@@ -396,8 +446,8 @@ async function main() {
       const workerId = workerIds[i % workerIds.length];
       const assignmentStatus: JobStatus =
         status === ComplaintStatus.COMPLETED || status === ComplaintStatus.CLOSED ? JobStatus.COMPLETED :
-        status === ComplaintStatus.IN_PROGRESS ? JobStatus.IN_PROGRESS :
-        status === ComplaintStatus.ACCEPTED ? JobStatus.ACCEPTED : JobStatus.PENDING;
+          status === ComplaintStatus.IN_PROGRESS ? JobStatus.IN_PROGRESS :
+            status === ComplaintStatus.ACCEPTED ? JobStatus.ACCEPTED : JobStatus.PENDING;
 
       await prisma.assignment.create({
         data: {
@@ -434,7 +484,7 @@ async function main() {
     }
 
     complaintCount++;
-    if (complaintCount % 50 === 0) console.log(`  Created ${complaintCount} complaints...`);
+    if (complaintCount % 10 === 0) console.log(`  Created ${complaintCount} complaints...`);
   }
   console.log(`✅ Created ${complaintCount} complaints`);
 
@@ -462,6 +512,7 @@ async function main() {
     }
   }
 
+  stopKeepAlive();
   console.log('\n✅ Seed completed successfully!');
   console.log('\n📋 Test Credentials:');
   console.log('  Management: director@hosteldesk.com / Password123');
@@ -474,8 +525,10 @@ async function main() {
 main()
   .catch(e => {
     console.error('❌ Seed failed:', e);
+    stopKeepAlive();
     process.exit(1);
   })
   .finally(async () => {
+    stopKeepAlive();
     await prisma.$disconnect();
   });

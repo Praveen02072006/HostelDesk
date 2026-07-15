@@ -375,6 +375,11 @@ model Complaint {
   notifications Notification[]
   inventoryUsage InventoryUsage[]
 
+  @@index([status])
+  @@index([priority])
+  @@index([hostelId])
+  @@index([studentId])
+  @@index([createdAt])
   @@map("complaints")
 }
 
