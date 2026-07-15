@@ -129,3 +129,7 @@ The backend follows a Clean Architecture approach:
 
 ## 📄 License
 This project is proprietary and confidential. Unauthorized copying of this file, via any medium is strictly prohibited.
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> 2de13d2209155531badcfa5fca600efd8de4c977
