@@ -32,19 +32,20 @@ export function DataTable<T>({
   emptyMessage = 'No data available',
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Simple filtering
   const filteredData = React.useMemo(() => {
-    if (!searchable || !searchKey || !searchTerm) return data;
+    if (!searchable || !searchKey || !deferredSearchTerm) return data;
     return data.filter((item) => {
       const val = item[searchKey as keyof T];
       if (typeof val === 'string') {
-        return val.toLowerCase().includes(searchTerm.toLowerCase());
+        return val.toLowerCase().includes(deferredSearchTerm.toLowerCase());
       }
       return false;
     });
-  }, [data, searchable, searchKey, searchTerm]);
+  }, [data, searchable, searchKey, deferredSearchTerm]);
 
   // Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);

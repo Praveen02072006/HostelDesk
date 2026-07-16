@@ -128,29 +128,22 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
           }
         }
         break;
+        
+      case Role.WORKER:
+      case Role.ADMIN:
+      case Role.SUPERVISOR:
+      case Role.MANAGEMENT:
+        const otherUpdateData: any = { phone, avatar };
+        Object.keys(otherUpdateData).forEach(key => otherUpdateData[key] === undefined && delete otherUpdateData[key]);
+        
+        if (role === Role.WORKER) updatedProfile = await prisma.worker.update({ where: { userId }, data: otherUpdateData });
+        else if (role === Role.ADMIN) updatedProfile = await prisma.admin.update({ where: { userId }, data: otherUpdateData });
+        else if (role === Role.SUPERVISOR) updatedProfile = await prisma.supervisor.update({ where: { userId }, data: otherUpdateData });
+        else if (role === Role.MANAGEMENT) updatedProfile = await prisma.management.update({ where: { userId }, data: otherUpdateData });
+        break;
+
       default:
         throw new AppError('Invalid role for profile update', 400);
-    }
-    
-    // For other roles, use the original limited update fields
-    if (role !== Role.STUDENT) {
-       const otherUpdateData: any = { phone, avatar };
-       Object.keys(otherUpdateData).forEach(key => otherUpdateData[key] === undefined && delete otherUpdateData[key]);
-       
-       switch (role) {
-          case Role.WORKER:
-            updatedProfile = await prisma.worker.update({ where: { userId }, data: otherUpdateData });
-            break;
-          case Role.ADMIN:
-            updatedProfile = await prisma.admin.update({ where: { userId }, data: otherUpdateData });
-            break;
-          case Role.SUPERVISOR:
-            updatedProfile = await prisma.supervisor.update({ where: { userId }, data: otherUpdateData });
-            break;
-          case Role.MANAGEMENT:
-            updatedProfile = await prisma.management.update({ where: { userId }, data: otherUpdateData });
-            break;
-       }
     }
 
     res.json({
