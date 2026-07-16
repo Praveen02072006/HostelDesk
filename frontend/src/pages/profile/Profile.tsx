@@ -126,9 +126,7 @@ export default function Profile() {
       formData.append('images', file);
       formData.append('type', 'avatar');
       
-      const uploadRes = await api.post('/uploads', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      }) as any;
+      const uploadRes = await api.post('/uploads', formData) as any;
       
       const imageUrl = uploadRes.data.data[0].url;
       await api.patch('/profile', { avatar: imageUrl });
