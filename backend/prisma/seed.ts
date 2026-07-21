@@ -108,36 +108,32 @@ async function main() {
   // ROOMS
   // ============================================================
   console.log('Creating rooms...');
-  const rooms: { id: string; hostelId: string; block: string; floor: number; roomNumber: string }[] = [];
+  const roomsData = [];
 
   for (const hostel of hostels) {
     for (const block of hostel.blocks) {
       for (let floor = 1; floor <= hostel.floors; floor++) {
         for (let roomNum = 1; roomNum <= 8; roomNum++) {
           const roomNumber = `${block}${floor}0${roomNum}`;
-
-          const room = await prisma.room.upsert({
-            where: {
-              hostelId_roomNumber_block: {
-                hostelId: hostel.id,
-                roomNumber,
-                block,
-              },
-            },
-            create: {
-              hostelId: hostel.id,
-              roomNumber,
-              floor,
-              block,
-              capacity: 4,
-            },
-            update: {},
+          roomsData.push({
+            hostelId: hostel.id,
+            roomNumber,
+            floor,
+            block,
+            capacity: 4,
           });
-          rooms.push({ id: room.id, hostelId: hostel.id, block, floor, roomNumber });
         }
       }
     }
   }
+
+  const createdRooms = await prisma.room.createMany({
+    data: roomsData,
+    skipDuplicates: true,
+  });
+
+  // Re-fetch rooms to keep the original array structure for the rest of the script
+  const rooms = await prisma.room.findMany();
   console.log(`✅ Created ${rooms.length} rooms`);
 
   // ============================================================
@@ -314,42 +310,59 @@ async function main() {
   // ============================================================
   console.log('Creating students...');
   const studentIds: string[] = [];
+  const STUDENT_BATCH_SIZE = 5;
+  const TOTAL_STUDENTS = 50;
 
-  for (let i = 0; i < 100; i++) {
-    const firstName = getRandomElement(firstNames);
-    const lastName = getRandomElement(lastNames);
-    const email = `student${i + 1}@hosteldesk.com`;
-    const hostel = hostels[i % hostels.length];
-    const hostelRooms = rooms.filter(r => r.hostelId === hostel.id);
-    const room = hostelRooms[i % hostelRooms.length];
+  for (let batch = 0; batch < Math.ceil(TOTAL_STUDENTS / STUDENT_BATCH_SIZE); batch++) {
+    const batchPromises = [];
+    for (let j = 0; j < STUDENT_BATCH_SIZE; j++) {
+      const i = batch * STUDENT_BATCH_SIZE + j;
+      if (i >= TOTAL_STUDENTS) break;
 
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {},
-      create: {
-        email,
-        password: hashedPassword,
-        role: Role.STUDENT,
-        isEmailVerified: true,
-        student: {
+      const firstName = getRandomElement(firstNames);
+      const lastName = getRandomElement(lastNames);
+      const email = `student${i + 1}@hosteldesk.com`;
+      const hostel = hostels[i % hostels.length];
+      const hostelRooms = rooms.filter(r => r.hostelId === hostel.id);
+      const room = hostelRooms[i % hostelRooms.length];
+
+      batchPromises.push(
+        prisma.user.upsert({
+          where: { email },
+          update: {},
           create: {
-            firstName,
-            lastName,
-            studentId: `STU${String(2024000 + i + 1)}`,
-            phone: `+91 9${getRandomInt(100000000, 999999999)}`,
-            hostelId: hostel.id,
-            roomId: room.id,
-            department: getRandomElement(departments),
-            year: getRandomInt(1, 4),
+            email,
+            password: hashedPassword,
+            role: Role.STUDENT,
+            isEmailVerified: true,
+            student: {
+              create: {
+                firstName,
+                lastName,
+                studentId: `STU${String(2024000 + i + 1)}`,
+                phone: `+91 9${getRandomInt(100000000, 999999999)}`,
+                hostelId: hostel.id,
+                roomId: room.id,
+                department: getRandomElement(departments),
+                year: getRandomInt(1, 4),
+              },
+            },
           },
-        },
-      },
-      include: { student: true },
-    });
+          include: { student: true },
+        })
+      );
+    }
 
-    if (user.student) studentIds.push(user.student.id);
+    const results = await Promise.all(batchPromises);
+    for (const user of results) {
+      if (user.student) studentIds.push(user.student.id);
+    }
+
+    if ((batch + 1) % 4 === 0) {
+      console.log(`  Created ${Math.min((batch + 1) * STUDENT_BATCH_SIZE, TOTAL_STUDENTS)} students...`);
+    }
   }
-  console.log(`✅ Created 100 students`);
+  console.log(`✅ Created ${TOTAL_STUDENTS} students`);
 
   // ============================================================
   // COMPLAINTS (50 - smaller batch to avoid Neon connection drops)
