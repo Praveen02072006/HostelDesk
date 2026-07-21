@@ -27,18 +27,21 @@ export const checkSLABreaches = async () => {
         data: { slaBreached: true },
       });
 
+      // Batch create all notifications in parallel
+      const notificationPromises: Promise<unknown>[] = [];
       for (const complaint of breachedComplaints) {
-        // Notify all admins of this hostel
         for (const admin of complaint.hostel.admins) {
-          await prisma.notification.create({
-            data: {
-              userId: admin.userId,
-              title: '⚠️ SLA Breach Alert',
-              message: `Complaint #${complaint.ticketNumber} has breached SLA deadline`,
-              type: 'SLA_BREACH',
-              complaintId: complaint.id,
-            },
-          });
+          notificationPromises.push(
+            prisma.notification.create({
+              data: {
+                userId: admin.userId,
+                title: '⚠️ SLA Breach Alert',
+                message: `Complaint #${complaint.ticketNumber} has breached SLA deadline`,
+                type: 'SLA_BREACH',
+                complaintId: complaint.id,
+              },
+            })
+          );
           emitNotification(admin.userId, {
             title: '⚠️ SLA Breach Alert',
             message: `Complaint #${complaint.ticketNumber} breached SLA`,
@@ -47,6 +50,7 @@ export const checkSLABreaches = async () => {
           });
         }
       }
+      await Promise.all(notificationPromises);
 
       logger.info(`SLA check: ${breachedComplaints.length} complaints breached SLA`);
     }
@@ -73,8 +77,9 @@ export const sendDeadlineReminders = async () => {
       },
     });
 
-    for (const assignment of urgentAssignments) {
-      await prisma.notification.create({
+    // Batch create all deadline reminder notifications
+    await Promise.all(urgentAssignments.map(assignment =>
+      prisma.notification.create({
         data: {
           userId: assignment.worker.userId,
           title: '⏰ Deadline Approaching',
@@ -82,7 +87,10 @@ export const sendDeadlineReminders = async () => {
           type: 'DEADLINE_REMINDER',
           complaintId: assignment.complaintId,
         },
-      });
+      })
+    ));
+    // Emit socket notifications (non-blocking)
+    for (const assignment of urgentAssignments) {
       emitNotification(assignment.worker.userId, {
         title: '⏰ Deadline Approaching',
         message: `Complaint #${assignment.complaint.ticketNumber} deadline approaching`,

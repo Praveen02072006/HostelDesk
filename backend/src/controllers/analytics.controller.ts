@@ -71,21 +71,29 @@ export const getComplaintTrends = async (req: Request, res: Response) => {
   const { months = '6', hostelId } = req.query;
   const monthsNum = parseInt(months as string);
 
-  const results = [];
   const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth() - monthsNum + 1, 1);
+
+  const where: Record<string, unknown> = { createdAt: { gte: startDate } };
+  if (hostelId) where.hostelId = hostelId;
+
+  // Single query to fetch all complaints in the date range
+  const complaints = await prisma.complaint.findMany({
+    where,
+    select: { createdAt: true, status: true, slaBreached: true },
+  });
+
+  const resolvedStatuses = new Set(['COMPLETED', 'CLOSED', 'ARCHIVED']);
+  const results = [];
 
   for (let i = monthsNum - 1; i >= 0; i--) {
     const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
 
-    const where: Record<string, unknown> = { createdAt: { gte: start, lte: end } };
-    if (hostelId) where.hostelId = hostelId;
-
-    const [total, resolved, slaBreached] = await Promise.all([
-      prisma.complaint.count({ where }),
-      prisma.complaint.count({ where: { ...where, status: { in: ['COMPLETED', 'CLOSED', 'ARCHIVED'] } } }),
-      prisma.complaint.count({ where: { ...where, slaBreached: true } }),
-    ]);
+    const monthComplaints = complaints.filter(c => c.createdAt >= start && c.createdAt <= end);
+    const total = monthComplaints.length;
+    const resolved = monthComplaints.filter(c => resolvedStatuses.has(c.status)).length;
+    const slaBreached = monthComplaints.filter(c => c.slaBreached).length;
 
     results.push({
       month: start.toLocaleString('default', { month: 'short', year: '2-digit' }),
@@ -238,15 +246,21 @@ export const getTopRooms = async (req: Request, res: Response) => {
     take: limitNum,
   });
 
-  const roomDetails = await Promise.all(
-    topRooms.map(async r => {
-      const room = await prisma.room.findUnique({
-        where: { id: r.roomId! },
+  // Batch fetch all rooms in one query instead of N+1
+  const roomIds = topRooms.map(r => r.roomId!).filter(Boolean);
+  const rooms = roomIds.length > 0
+    ? await prisma.room.findMany({
+        where: { id: { in: roomIds } },
         include: { hostel: { select: { name: true } } },
-      });
-      return { room, complaintCount: r._count.roomId };
-    })
-  );
+      })
+    : [];
+
+  const roomMap = new Map(rooms.map(r => [r.id, r]));
+
+  const roomDetails = topRooms.map(r => ({
+    room: roomMap.get(r.roomId!) || null,
+    complaintCount: r._count.roomId,
+  }));
 
   res.status(200).json({ success: true, data: roomDetails });
 };
@@ -259,23 +273,38 @@ export const getHostelComparison = async (_req: Request, res: Response) => {
     },
   });
 
-  const result = await Promise.all(
-    hostels.map(async h => {
-      const [resolved, slaBreached] = await Promise.all([
-        prisma.complaint.count({ where: { hostelId: h.id, status: { in: ['COMPLETED', 'CLOSED'] } } }),
-        prisma.complaint.count({ where: { hostelId: h.id, slaBreached: true } }),
-      ]);
-      return {
-        hostel: { id: h.id, name: h.name, code: h.code },
-        totalComplaints: h._count.complaints,
-        resolvedComplaints: resolved,
-        slaBreached,
-        studentCount: h._count.students,
-        workerCount: h._count.workers,
-        resolutionRate: h._count.complaints > 0 ? Math.round((resolved / h._count.complaints) * 100) : 0,
-      };
-    })
-  );
+  // Batch: get all resolved and SLA breached counts in two queries instead of 2*N
+  const hostelIds = hostels.map(h => h.id);
+
+  const [resolvedByHostel, slaByHostel] = await Promise.all([
+    prisma.complaint.groupBy({
+      by: ['hostelId'],
+      where: { hostelId: { in: hostelIds }, status: { in: ['COMPLETED', 'CLOSED'] } },
+      _count: { hostelId: true },
+    }),
+    prisma.complaint.groupBy({
+      by: ['hostelId'],
+      where: { hostelId: { in: hostelIds }, slaBreached: true },
+      _count: { hostelId: true },
+    }),
+  ]);
+
+  const resolvedMap = new Map(resolvedByHostel.map(r => [r.hostelId, r._count.hostelId]));
+  const slaMap = new Map(slaByHostel.map(r => [r.hostelId, r._count.hostelId]));
+
+  const result = hostels.map(h => {
+    const resolved = resolvedMap.get(h.id) || 0;
+    const slaBreached = slaMap.get(h.id) || 0;
+    return {
+      hostel: { id: h.id, name: h.name, code: h.code },
+      totalComplaints: h._count.complaints,
+      resolvedComplaints: resolved,
+      slaBreached,
+      studentCount: h._count.students,
+      workerCount: h._count.workers,
+      resolutionRate: h._count.complaints > 0 ? Math.round((resolved / h._count.complaints) * 100) : 0,
+    };
+  });
 
   res.status(200).json({ success: true, data: result });
 };

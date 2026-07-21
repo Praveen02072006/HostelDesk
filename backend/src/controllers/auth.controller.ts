@@ -119,8 +119,8 @@ export const register = async (req: Request, res: Response) => {
     },
   });
 
-  // Send welcome email
-  await sendEmail({
+  // Fire-and-forget welcome email (don't block response)
+  sendEmail({
     to: body.email,
     ...emailTemplates.welcome(`${body.firstName} ${body.lastName}`, body.role),
   });
@@ -170,20 +170,21 @@ export const login = async (req: Request, res: Response) => {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + (body.rememberMe ? 30 : 7));
 
-  await prisma.refreshToken.create({
-    data: {
-      id: tokenId,
-      token: refreshTokenStr,
-      userId: user.id,
-      expiresAt,
-    },
-  });
-
-  // Update last login
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  });
+  // Parallelize token storage and last login update
+  await Promise.all([
+    prisma.refreshToken.create({
+      data: {
+        id: tokenId,
+        token: refreshTokenStr,
+        userId: user.id,
+        expiresAt,
+      },
+    }),
+    prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    }),
+  ]);
 
   // Get profile data
   const profile = user.student || user.worker || user.admin || user.supervisor || user.management;
@@ -280,7 +281,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
     || await prisma.admin.findUnique({ where: { userId: user.id } });
   const name = profile ? `${(profile as { firstName: string }).firstName}` : 'User';
 
-  await sendEmail({
+  // Fire-and-forget reset email (don't block response)
+  sendEmail({
     to: user.email,
     ...emailTemplates.passwordReset(name, resetUrl),
   });

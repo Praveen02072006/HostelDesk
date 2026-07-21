@@ -127,8 +127,9 @@ export const createComplaint = async (req: Request, res: Response) => {
     });
 
     const isCritical = body.priority === Priority.CRITICAL;
-    for (const admin of admins) {
-      await prisma.notification.create({
+    // Batch create all admin notifications in parallel
+    await Promise.all(admins.map(admin =>
+      prisma.notification.create({
         data: {
           userId: admin.userId,
           title: isCritical ? '🚨 Critical Complaint Raised' : '📋 New Complaint Raised',
@@ -138,7 +139,10 @@ export const createComplaint = async (req: Request, res: Response) => {
           type: isCritical ? 'HIGH_PRIORITY_ALERT' : 'COMPLAINT_SUBMITTED',
           complaintId: complaint.id,
         },
-      });
+      })
+    ));
+    // Emit socket notifications (non-blocking, no await needed)
+    for (const admin of admins) {
       emitNotification(admin.userId, {
         title: isCritical ? '🚨 Critical Complaint' : '📋 New Complaint',
         message: isCritical
@@ -150,8 +154,8 @@ export const createComplaint = async (req: Request, res: Response) => {
     }
   }
 
-  // Send email confirmation
-  await sendEmail({
+  // Fire-and-forget email (don't block the response)
+  sendEmail({
     to: req.user!.email,
     ...emailTemplates.complaintSubmitted(
       `${student.firstName}`,
@@ -511,8 +515,8 @@ export const assignWorker = async (req: Request, res: Response) => {
     },
   });
 
-  // Send email to student
-  await sendEmail({
+  // Fire-and-forget email to student (don't block response)
+  sendEmail({
     to: complaint.student.user.email,
     ...emailTemplates.workerAssigned(
       complaint.student.firstName,

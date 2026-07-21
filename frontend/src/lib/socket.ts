@@ -8,19 +8,30 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 export const initSocket = (token: string) => {
   if (socket?.connected) return;
 
+  // Disconnect any stale socket before creating a new one
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+  }
+
   socket = io(SOCKET_URL, {
     auth: { token },
+    transports: ['websocket', 'polling'], // Prefer websocket (faster, lower latency)
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 10,
     reconnectionDelay: 1000,
+    reconnectionDelayMax: 30000, // Exponential backoff up to 30s
+    timeout: 10000,
+    forceNew: false,
   });
 
   socket.on('connect', () => {
-    console.log('Socket connected');
+    if (import.meta.env.DEV) console.log('Socket connected');
   });
 
   socket.on('disconnect', () => {
-    console.log('Socket disconnected');
+    if (import.meta.env.DEV) console.log('Socket disconnected');
   });
 
   socket.on('notification', (data) => {
@@ -40,15 +51,17 @@ export const getSocket = () => socket;
 
 export const disconnectSocket = () => {
   if (socket) {
+    socket.removeAllListeners();
     socket.disconnect();
     socket = null;
   }
 };
 
 export const subscribeToComplaint = (complaintId: string) => {
-  if (socket) socket.emit('subscribe:complaint', complaintId);
+  if (socket?.connected) socket.emit('subscribe:complaint', complaintId);
 };
 
 export const unsubscribeFromComplaint = (complaintId: string) => {
-  if (socket) socket.emit('unsubscribe:complaint', complaintId);
+  if (socket?.connected) socket.emit('unsubscribe:complaint', complaintId);
 };
+

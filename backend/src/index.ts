@@ -43,21 +43,29 @@ app.use(cors({
 // ============================================================
 // GENERAL MIDDLEWARES
 // ============================================================
-app.use(compression());
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+}));
 app.use(cookieParser(env.COOKIE_SECRET));
 // Vercel serverless environment already parses the body
 app.use((req, res, next) => {
   if (req.body && Object.keys(req.body).length > 0) return next();
-  express.json({ limit: '10mb' })(req, res, next);
+  express.json({ limit: '5mb' })(req, res, next);
 });
 app.use((req, res, next) => {
   if (req.body && Object.keys(req.body).length > 0) return next();
-  express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+  express.urlencoded({ extended: true, limit: '5mb' })(req, res, next);
 });
 
 if (env.NODE_ENV !== 'test') {
-  app.use(morgan('combined', {
+  app.use(morgan(env.NODE_ENV === 'production' ? 'short' : 'dev', {
     stream: { write: (message) => logger.http(message.trim()) },
+    skip: (_req, res) => env.NODE_ENV === 'production' && res.statusCode < 400,
   }));
 }
 
@@ -67,9 +75,11 @@ if (env.NODE_ENV !== 'test') {
 app.use('/api', rateLimiter);
 
 // ============================================================
-// API DOCUMENTATION
+// API DOCUMENTATION (dev/staging only for faster prod startup)
 // ============================================================
-setupSwagger(app);
+if (env.NODE_ENV !== 'production') {
+  setupSwagger(app);
+}
 
 // ============================================================
 // HEALTH CHECK

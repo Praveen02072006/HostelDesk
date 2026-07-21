@@ -20,6 +20,12 @@ export const initializeSocket = (server: HTTPServer): Server => {
       credentials: true,
     },
     pingTimeout: 60000,
+    pingInterval: 25000,
+    maxHttpBufferSize: 1e6, // 1MB max payload
+    httpCompression: {
+      threshold: 1024, // Compress payloads > 1KB
+    },
+    transports: ['websocket', 'polling'],
   });
 
   // Authentication middleware
@@ -44,7 +50,7 @@ export const initializeSocket = (server: HTTPServer): Server => {
     if (!userId) return;
 
     onlineUsers.set(userId, socket.id);
-    logger.info(`User connected: ${userId} (socket: ${socket.id})`);
+    logger.debug(`User connected: ${userId} (socket: ${socket.id})`);
 
     // Join user's personal room
     socket.join(`user:${userId}`);
@@ -74,7 +80,7 @@ export const initializeSocket = (server: HTTPServer): Server => {
 
     socket.on('disconnect', () => {
       onlineUsers.delete(userId);
-      logger.info(`User disconnected: ${userId}`);
+      logger.debug(`User disconnected: ${userId}`);
     });
   });
 

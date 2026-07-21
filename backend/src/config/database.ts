@@ -6,20 +6,25 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 export const prisma = global.__prisma || new PrismaClient({
-  log: [
-    { level: 'query', emit: 'event' },
-    { level: 'error', emit: 'stdout' },
-    { level: 'warn', emit: 'stdout' },
-  ],
+  log: isProduction
+    ? [{ level: 'error', emit: 'stdout' }]
+    : [
+        { level: 'query', emit: 'event' },
+        { level: 'error', emit: 'stdout' },
+        { level: 'warn', emit: 'stdout' },
+      ],
 });
 
-if (process.env.NODE_ENV !== 'production') {
+if (!isProduction) {
   global.__prisma = prisma;
 }
 
-// Log slow queries in development
-if (process.env.NODE_ENV === 'development') {
+// Log slow queries in development only
+if (isDevelopment) {
   prisma.$on('query' as never, (e: { query: string; duration: number }) => {
     if (e.duration > 200) {
       logger.warn(`Slow query (${e.duration}ms): ${e.query}`);
